@@ -1,50 +1,43 @@
 #include <Arduino.h>
 #include <TinyGPS++.h>
-#include <SoftwareSerial.h>
 #include <WiFiS3.h>
-#include <secrets.h>
+#include <ArduinoHttpClient.h>
+#include <certificate.h>
+#include <connection_info.h>
 #include <wifi_tools.h>
+#include <http_requests.h>
+#include <debugger.h>
 
-#define GPS_BAUD 9600
 #define SERIAL_BAUD 9600
-#define RX_PIN 5
-#define TX_PIN 4
 
 TinyGPSPlus gps;
-SoftwareSerial ss(RX_PIN, TX_PIN);
-int status = WL_IDLE_STATUS;
+WiFiSSLClient ssl_client;
+HttpClient http_client = HttpClient(ssl_client, SERVER_ADDR, SERVER_PORT);
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
-  ss.begin(GPS_BAUD);
+  Serial1.begin(SERIAL_BAUD);
   delay(2000);
-  if(WiFi.status() == WL_NO_MODULE){
-    Serial.println("WiFi module: ERROR");
-    while(true) {}
-  }
-  Serial.println("WiFi module: OK");
-  if (WiFi.firmwareVersion() < WIFI_FIRMWARE_LATEST_VERSION){
-    Serial.println("Firmware: ERROR");
-  }else{
-    Serial.println("Firmware: OK");
-  }
-  while (status != WL_CONNECTED){
-    Serial.println("Establishing connection...");
-    status = WiFi.begin(WIFI_SSID, WIFI_PASS);
-  }
-  Serial.println("** WIFI CONNECTION ESTABLISHED **");
-  printCurrentNetInfo();
+  wifi_setup();
+  ssl_client.setCACert(root_ca_certificate);
+  Serial.println("CA_CERT:\tOK");
 }
 
 void loop() {
-  while (ss.available() > 0){
-    gps.encode(ss.read());
-    if (gps.location.isUpdated()){
-      Serial.print("Latitude=   "); 
-      Serial.print(gps.location.lat(), 6);
-      Serial.print(" Longitude=   "); 
-      Serial.println(gps.location.lng(), 6);
+  if (Serial1.available() > 0){
+    if(gps.encode(Serial1.read())){
+      if(gps.location.isUpdated()){
+        printGPSInfo(gps);
+        while (WiFi.status() != WL_CONNECTED){
+          Serial.println("WIFI_CONNECTION:\tERROR");
+          delay(10000);
+        }
+        post_gps_location(http_client, gps);
+        delay(10000);
+      }
     }
   }
 }
+
+
 

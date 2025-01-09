@@ -1,2 +1,5 @@
 .*/
-secrets.h
+wifi_pass.h
+certificate.cert
+certificate.h
+connection_info.h
